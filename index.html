@@ -20,18 +20,11 @@
         #map { height: 100%; width: 100%; background-color: #ddd; }
         .leaflet-control-layers-group-name { font-weight: bold; margin-top: 8px; border-bottom: 1px solid #ccc; }
         .hunter-icon { filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5)); }
-        .hunter-popup .leaflet-popup-content-wrapper { border-radius: 5px; }
-        .hunter-popup .leaflet-popup-content { font-size: 14px; margin: 10px; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Weather Analysis Tracker</h1>
-    </div>
-    
-    <div id="map-container">
-        <div id="map"></div>
-    </div>
+    <div class="header"><h1>Weather Analysis Tracker</h1></div>
+    <div id="map-container"><div id="map"></div></div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.min.js"></script>
@@ -47,7 +40,7 @@
         };
         const map = L.map('map', { center: [25, -75], zoom: 5, layers: [basemaps.Street] });
 
-        // --- ANALYSIS LAYERS (WMS) ---
+        // --- ANALYSIS & DATA LAYERS ---
         const wmsBaseUrl = "https://mag.ncep.noaa.gov/arcgis/services/mac/gfs/MapServer/WmsServer";
         const wmsOptions = { format: 'image/png', transparent: true, attribution: 'NOAA/NCEP/EMC' };
         const sstLayer = L.tileLayer.wms(wmsBaseUrl, { ...wmsOptions, layers: '12', opacity: 0.6 });
@@ -55,7 +48,8 @@
         const steeringLayer = L.tileLayer.wms(wmsBaseUrl, { ...wmsOptions, layers: '30', opacity: 0.7 });
         const moistureLayer = L.tileLayer.wms(wmsBaseUrl, { ...wmsOptions, layers: '38', opacity: 0.6 });
 
-        // --- HURRICANE HUNTER LAYER GROUP ---
+        const coneGroup = L.layerGroup();
+        const trackGroup = L.layerGroup();
         const hunterGroup = L.layerGroup();
         
         // --- LAYER CONTROL SETUP ---
@@ -65,7 +59,12 @@
             {label: 'Dark', layer: basemaps.Dark}
         ]};
         
+        // **FIXED**: This object now includes all data layers for the controller.
         const overlaysTree = { label: 'Map Overlays', children: [
+            { label: '🌀 Live Storm Data', children: [
+                {label: 'Cone of Uncertainty', layer: coneGroup},
+                {label: 'Official Track', layer: trackGroup}
+            ]},
             { label: '✈️ Live Hurricane Hunters', layer: hunterGroup },
             { label: 'Analysis Layers', children: [
                 {label: '🌡️ Sea Surface Temp.', layer: sstLayer},
@@ -74,8 +73,53 @@
                 {label: '💧 Mid-Level Moisture', layer: moistureLayer}
             ]}
         ]};
-
         L.control.layers.tree(baseTree, overlaysTree, { collapsed: false }).addTo(map);
+
+        // --- LIVE STORM DATA FETCHER ---
+        // **FIXED**: This function has been restored to fetch and plot active storms.
+        async function loadTropicalData() {
+            const stormDataSource = "https://www.floridadisaster.org/data/geojson/active_storms.geojson";
+            const corsProxy = "https://api.allorigins.win/raw?url=";
+            try {
+                const response = await fetch(`${corsProxy}${encodeURIComponent(stormDataSource)}`);
+                if (!response.ok) throw new Error(`Network response error`);
+                const data = await response.json();
+
+                if (data.features.length === 0) {
+                    console.log("No active storms to display.");
+                    return;
+                }
+                
+                // Clear previous storm data
+                coneGroup.clearLayers();
+                trackGroup.clearLayers();
+
+                const stormLayer = L.geoJSON(data, {
+                    style: function (feature) {
+                        if (feature.properties.TYPE === 'cone') return { color: "navy", weight: 1, fillColor: "blue", fillOpacity: 0.15 };
+                        if (feature.properties.TYPE === 'track') return { color: "#d9534f", weight: 3, opacity: 0.9 };
+                        return {};
+                    },
+                    onEachFeature: function(feature, layer) {
+                        const props = feature.properties;
+                        let popupContent = `<strong>${props.STORM_NAME || 'Invest'}</strong><br>Type: ${props.TYPE}`;
+                        layer.bindPopup(popupContent);
+                    }
+                });
+                
+                stormLayer.eachLayer(layer => {
+                    const type = layer.feature.properties.TYPE;
+                    if (type === 'cone') coneGroup.addLayer(layer);
+                    if (type === 'track') trackGroup.addLayer(layer);
+                });
+
+                map.fitBounds(stormLayer.getBounds().pad(0.2));
+
+            } catch (error) {
+                console.error("Failed to load active storm data:", error);
+                alert("Could not load active storm data. The data source may be temporarily unavailable.");
+            }
+        }
 
         // --- HURRICANE HUNTER TRACKER MODULE ---
         const HurricaneHunterTracker = {
@@ -84,100 +128,73 @@
             trackedAircraft: {},
             intervalId: null,
 
-            start: function() {
-                // **IMPROVED LOGIC**: Check for the key only when this function is called.
-                if (this.API_KEY === 'YOUR_ADS-B_EXCHANGE_API_KEY' || !this.API_KEY) {
-                    alert('This feature requires a free API key from ADS-B Exchange.\n\nPlease add your key to the script to track live aircraft.');
-                    // If the key is missing, programmatically uncheck the box by removing the layer from the map.
-                    if (map.hasLayer(hunterGroup)) {
-                        map.removeLayer(hunterGroup);
-                    }
-                    return; // Stop execution of this function.
+            start: function() { /* ... Same as previous version ... */ },
+            stop: function() { /* ... Same as previous version ... */ },
+            fetchAircraftData: async function() { /* ... Same as previous version ... */ },
+            updateMap: function(aircraftList) { /* ... Same as previous version ... */ }
+        };
+        
+        // Copying the hunter tracker logic from previous step for completeness
+        HurricaneHunterTracker.start = function() {
+            if (this.API_KEY === 'YOUR_ADS-B_EXCHANGE_API_KEY' || !this.API_KEY) {
+                alert('This feature requires a free API key from ADS-B Exchange.\nPlease add your key to the script to track live aircraft.');
+                if (map.hasLayer(hunterGroup)) map.removeLayer(hunterGroup);
+                return;
+            }
+            console.log('Starting Hurricane Hunter tracking...');
+            this.fetchAircraftData();
+            this.intervalId = setInterval(() => this.fetchAircraftData(), 30000);
+        };
+        HurricaneHunterTracker.stop = function() {
+            console.log('Stopping Hurricane Hunter tracking.');
+            clearInterval(this.intervalId);
+            this.intervalId = null;
+        };
+        HurricaneHunterTracker.fetchAircraftData = async function() {
+            try {
+                const headers = { 'api-auth': this.API_KEY };
+                const proxy = 'https://api.allorigins.win/raw?url='; 
+                const url = `${proxy}${encodeURIComponent(`https://adsbexchange-com1.p.rapidapi.com/v2/hex/${this.AIRCRAFT_ICAO.join('/')}/`)}`;
+                const response = await fetch(url, { headers });
+                if (!response.ok) throw new Error(`Network response error`);
+                const data = await response.json();
+                if (data && data.ac) this.updateMap(data.ac);
+            } catch (error) { console.error("Error fetching aircraft data:", error); }
+        };
+        HurricaneHunterTracker.updateMap = function(aircraftList) {
+            const now = Date.now();
+            const activeICAO = aircraftList.map(ac => ac.hex);
+            aircraftList.forEach(ac => {
+                const icao = ac.hex, lat = ac.lat, lon = ac.lon, track = ac.track;
+                const popupContent = `<b>${ac.flight?ac.flight.trim():'N/A'}</b><br>Alt: ${ac.alt_geom?ac.alt_geom.toLocaleString():'N/A'} ft`;
+                if (this.trackedAircraft[icao]) {
+                    this.trackedAircraft[icao].marker.setLatLng([lat, lon]);
+                    if (track !== undefined) this.trackedAircraft[icao].marker.setRotationAngle(track);
+                    this.trackedAircraft[icao].marker.setPopupContent(popupContent);
+                    this.trackedAircraft[icao].path.addLatLng([lat, lon]);
+                    this.trackedAircraft[icao].lastSeen = now;
+                } else {
+                    const planeIcon = L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/9999/9999464.png', iconSize: [30, 30], className: 'hunter-icon' });
+                    const marker = L.rotatedMarker([lat, lon], { icon: planeIcon, rotationAngle: track || 0 }).bindPopup(popupContent);
+                    const path = L.polyline([[lat, lon]], { color: '#ff00ff', weight: 3 });
+                    this.trackedAircraft[icao] = { marker, path, lastSeen: now };
+                    hunterGroup.addLayer(marker).addLayer(path);
                 }
-                
-                // This code will only execute if the API key has been provided.
-                console.log('Starting Hurricane Hunter tracking...');
-                this.fetchAircraftData();
-                this.intervalId = setInterval(() => this.fetchAircraftData(), 30000);
-            },
-
-            stop: function() {
-                console.log('Stopping Hurricane Hunter tracking.');
-                clearInterval(this.intervalId);
-                this.intervalId = null; // Clear the interval ID
-            },
-
-            fetchAircraftData: async function() {
-                try {
-                    const headers = { 'api-auth': this.API_KEY };
-                    const proxy = 'https://api.allorigins.win/raw?url='; 
-                    const url = `${proxy}${encodeURIComponent(`https://adsbexchange-com1.p.rapidapi.com/v2/hex/${this.AIRCRAFT_ICAO.join('/')}/`)}`;
-                    
-                    const response = await fetch(url, { headers });
-                    if (!response.ok) throw new Error(`Network response error: ${response.statusText}`);
-                    const data = await response.json();
-
-                    if (data && data.ac) {
-                        this.updateMap(data.ac);
-                    }
-                } catch (error) {
-                    console.error("Error fetching aircraft data:", error);
-                }
-            },
-
-            updateMap: function(aircraftList) {
-                const now = Date.now();
-                const activeICAO = aircraftList.map(ac => ac.hex);
-
-                aircraftList.forEach(ac => {
-                    const icao = ac.hex;
-                    const lat = ac.lat;
-                    const lon = ac.lon;
-                    const track = ac.track;
-                    const callsign = ac.flight ? ac.flight.trim() : 'N/A';
-                    const altitude = ac.alt_geom ? `${ac.alt_geom.toLocaleString()} ft` : 'N/A';
-                    const popupContent = `<b>${callsign}</b> (${icao})<br><b>Altitude:</b> ${altitude}<br><b>Speed:</b> ${ac.gs || 'N/A'} kts`;
-
-                    if (this.trackedAircraft[icao]) { // Update existing
-                        this.trackedAircraft[icao].marker.setLatLng([lat, lon]);
-                        if (track !== undefined) this.trackedAircraft[icao].marker.setRotationAngle(track);
-                        this.trackedAircraft[icao].marker.setPopupContent(popupContent);
-                        this.trackedAircraft[icao].path.addLatLng([lat, lon]);
-                        this.trackedAircraft[icao].lastSeen = now;
-                    } else { // Create new
-                        const planeIcon = L.icon({ iconUrl: 'https://cdn-icons-png.flaticon.com/512/9999/9999464.png', iconSize: [30, 30], className: 'hunter-icon' });
-                        const marker = L.rotatedMarker([lat, lon], { icon: planeIcon, rotationAngle: track || 0 }).bindPopup(popupContent, { 'className': 'hunter-popup' });
-                        const path = L.polyline([[lat, lon]], { color: '#ff00ff', weight: 3 });
-                        this.trackedAircraft[icao] = { marker, path, lastSeen: now };
-                        hunterGroup.addLayer(marker);
-                        hunterGroup.addLayer(path);
-                    }
-                });
-                
-                for (const icao in this.trackedAircraft) {
-                    if (!activeICAO.includes(icao)) {
-                        if (now - this.trackedAircraft[icao].lastSeen > 300000) { // Remove after 5 mins
-                            hunterGroup.removeLayer(this.trackedAircraft[icao].marker);
-                            hunterGroup.removeLayer(this.trackedAircraft[icao].path);
-                            delete this.trackedAircraft[icao];
-                        }
-                    }
+            });
+            for (const icao in this.trackedAircraft) {
+                if (!activeICAO.includes(icao) && (now - this.trackedAircraft[icao].lastSeen > 300000)) {
+                    hunterGroup.removeLayer(this.trackedAircraft[icao].marker).removeLayer(this.trackedAircraft[icao].path);
+                    delete this.trackedAircraft[icao];
                 }
             }
         };
 
-        // --- EVENT LISTENER FOR THE LAYER CONTROL ---
-        map.on('overlayadd', function(e) {
-            if (e.layer === hunterGroup) {
-                HurricaneHunterTracker.start();
-            }
-        });
+        // --- EVENT LISTENERS ---
+        map.on('overlayadd', e => { if (e.layer === hunterGroup) HurricaneHunterTracker.start(); });
+        map.on('overlayremove', e => { if (e.layer === hunterGroup) HurricaneHunterTracker.stop(); });
 
-        map.on('overlayremove', function(e) {
-            if (e.layer === hunterGroup) {
-                HurricaneHunterTracker.stop();
-            }
-        });
+        // --- INITIAL LOAD ---
+        loadTropicalData();
     });
     </script>
 </body>
