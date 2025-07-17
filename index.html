@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Weather Analysis Tracker</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* [Same CSS as the previous version] */
+        :root { --primary-color: #003366; --secondary-color: #eef4ff; --accent-color: #d9534f; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: 'Roboto', sans-serif; display: flex; flex-direction: column; background-color: #f0f2f5; }
+        .header { background-color: var(--primary-color); color: white; padding: 8px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 1001; }
+        .header h1 { margin: 0; font-size: 1.5em; }
+        #map-container { position: relative; width: 100%; height: 100%; }
+        #map { height: 100%; width: 100%; background-color: #ddd; }
+        .leaflet-control-layers-group-name { font-weight: bold; margin-top: 8px; border-bottom: 1px solid #ccc; }
+        .hunter-icon { filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5)); }
+        .hunter-popup .leaflet-popup-content-wrapper { border-radius: 5px; }
+        .hunter-popup .leaflet-popup-content { font-size: 14px; margin: 10px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Weather Analysis Tracker</h1>
+    </div>
+    
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-rotatedmarker@0.2.0/leaflet.rotatedMarker.min.js"></script>
+    <script src="https://unpkg.com/leaflet.control.layers.tree@1.0.1/L.Control.Layers.Tree.js"></script>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // --- MAP AND LAYER INITIALIZATION ---
+        const basemaps = { /* ... (Same as before) ... */ };
+        const map = L.map('map', { center: [25, -75], zoom: 5, layers: [basemaps.Street] });
+
+        // --- ANALYSIS LAYERS (WMS) ---
+        const wmsBaseUrl = "https://mag.ncep.noaa.gov/arcgis/services/mac/gfs/MapServer/WmsServer";
+        const wmsOptions = { format: 'image/png', transparent: true, attribution: 'NOAA/NCEP/EMC' };
+        const sstLayer = L.tileLayer.wms(wmsBaseUrl, { ...wmsOptions, layers: '12', opacity: 0.6 });
+        const windShearLayer = L.tileLayer.wms(wmsBaseUrl, { ...wmsOptions, layers: '4', opacity: 0.6 });
+        const steeringLayer = L.tileLayer.wms(wmsBaseUrl, { ...wmsOptions, layers: '30', opacity: 0.7 });
+        const moistureLayer = L.tileLayer.wms(wmsBaseUrl, { ...wmsOptions, layers: '38', opacity: 0.6 });
+
+        // --- NEW: HURRICANE HUNTER LAYER GROUP ---
+        const hunterGroup = L.layerGroup();
+        
+        // --- LAYER CONTROL SETUP ---
+        const baseTree = { label: 'Base Maps', children: [ /* ... */ ]};
+        const overlaysTree = { label: 'Map Overlays', children: [
+            { label: '🌀 Live Hurricane Hunters', layer: hunterGroup }, // New Layer
+            { label: 'Analysis Layers', children: [ /* ... */ ] }
+        ]};
+        L.control.layers.tree(baseTree, overlaysTree, { collapsed: false }).addTo(map);
+
+        // --- HURRICANE HUNTER TRACKER MODULE ---
+        const HurricaneHunterTracker = {
+            // !!! IMPORTANT: REPLACE WITH YOUR KEY !!!
+            // Get a free key from https://www.adsbexchange.com/data/
+            API_KEY: 'YOUR_ADS-B_EXCHANGE_API_KEY', 
+            
+            // Primary Hurricane Hunter Aircraft (ICAO 24-bit hex codes)
+            // NOAA P-3s (a4471b, a527d9), G-IV (a61505), USAF WC-130Js (ae010d, adfdf8, etc.)
+            AIRCRAFT_ICAO: ['a4471b', 'a527d9', 'a61505', 'adfdf8', 'ae010d', 'ae5c78', 'ae5c79'],
+            
+            trackedAircraft: {}, // Holds markers and polylines
+            intervalId: null,
+
+            start: function() {
+                if (this.API_KEY === 'YOUR_ADS-B_EXCHANGE_API_KEY') {
+                    alert('Please update the API_KEY in the script to track Hurricane Hunters.');
+                    return;
+                }
+                console.log('Starting Hurricane Hunter tracking...');
+                this.fetchAircraftData(); // Fetch immediately
+                this.intervalId = setInterval(() => this.fetchAircraftData(), 30000); // Poll every 30 seconds
+            },
+
+            stop: function() {
+                console.log('Stopping Hurricane Hunter tracking.');
+                clearInterval(this.intervalId);
+            },
+
+            fetchAircraftData: async function() {
+                try {
+                    const headers = { 'api-auth': this.API_KEY };
+                    // Using a CORS proxy for browser-based requests. In production, this should be a backend call.
+                    const proxy = 'https://api.allorigins.win/raw?url='; 
+                    const url = `${proxy}${encodeURIComponent(`https://adsbexchange-com1.p.rapidapi.com/v2/hex/${this.AIRCRAFT_ICAO.join('/')}/`)}`;
+                    
+                    const response = await fetch(url, { headers });
+                    if (!response.ok) throw new Error(`Network response error: ${response.statusText}`);
+                    const data = await response.json();
+
+                    if (data && data.ac) {
+                        this.updateMap(data.ac);
+                    }
+                } catch (error) {
+                    console.error("Error fetching aircraft data:", error);
+                }
+            },
+
+            updateMap: function(aircraftList) {
+                const now = Date.now();
+                const activeICAO = aircraftList.map(ac => ac.hex);
+
+                // Update existing or create new markers
+                aircraftList.forEach(ac => {
+                    const icao = ac.hex;
+                    const lat = ac.lat;
+                    const lon = ac.lon;
+                    const track = ac.track; // Heading/track in degrees
+                    const callsign = ac.flight ? ac.flight.trim() : 'N/A';
+                    const altitude = ac.alt_geom ? `${ac.alt_geom} ft (geom)` : 'N/A';
+
+                    const popupContent = `
+                        <b>${callsign}</b> (${icao})<br>
+                        <b>Altitude:</b> ${altitude}<br>
+                        <b>Speed:</b> ${ac.gs || 'N/A'} kts<br>
+                        <b>Track:</b> ${track || 'N/A'}&deg;
+                    `;
+
+                    if (this.trackedAircraft[icao]) { // If aircraft is already tracked
+                        this.trackedAircraft[icao].marker.setLatLng([lat, lon]);
+                        if (track !== undefined) {
+                            this.trackedAircraft[icao].marker.setRotationAngle(track);
+                        }
+                        this.trackedAircraft[icao].marker.setPopupContent(popupContent);
+                        this.trackedAircraft[icao].path.addLatLng([lat, lon]);
+                        this.trackedAircraft[icao].lastSeen = now;
+                    } else { // If it's a new aircraft
+                        const planeIcon = L.icon({
+                            iconUrl: 'https://cdn-icons-png.flaticon.com/512/9999/9999464.png', // A simple plane icon
+                            iconSize: [30, 30],
+                            className: 'hunter-icon'
+                        });
+
+                        const marker = L.rotatedMarker([lat, lon], {
+                            icon: planeIcon,
+                            rotationAngle: track || 0
+                        }).bindPopup(popupContent, { 'className': 'hunter-popup' });
+
+                        const path = L.polyline([[lat, lon]], { color: '#ff00ff', weight: 3 });
+
+                        this.trackedAircraft[icao] = { marker, path, lastSeen: now };
+                        hunterGroup.addLayer(marker);
+                        hunterGroup.addLayer(path);
+                    }
+                });
+                
+                // Remove aircraft that are no longer being tracked
+                for (const icao in this.trackedAircraft) {
+                    if (!activeICAO.includes(icao)) {
+                        // Check if it has been unseen for more than 5 minutes
+                        if (now - this.trackedAircraft[icao].lastSeen > 300000) {
+                            hunterGroup.removeLayer(this.trackedAircraft[icao].marker);
+                            hunterGroup.removeLayer(this.trackedAircraft[icao].path);
+                            delete this.trackedAircraft[icao];
+                        }
+                    }
+                }
+            }
+        };
+
+        // --- EVENT LISTENER FOR THE LAYER CONTROL ---
+        map.on('overlayadd', function(e) {
+            if (e.layer === hunterGroup) {
+                HurricaneHunterTracker.start();
+            }
+        });
+
+        map.on('overlayremove', function(e) {
+            if (e.layer === hunterGroup) {
+                HurricaneHunterTracker.stop();
+            }
+        });
+        
+        // Simplified basemap setup for brevity
+        basemaps.Street = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap' });
+        basemaps.Satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: '&copy; Esri' });
+        basemaps.Dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { attribution: '&copy; CartoDB' });
+        baseTree.children = [ {label: 'Street', layer: basemaps.Street}, {label: 'Satellite', layer: basemaps.Satellite}, {label: 'Dark', layer: basemaps.Dark} ];
+        overlaysTree.children[1].children = [ {label: '🌡️ Sea Surface Temp.', layer: sstLayer}, {label: '💨 Vertical Wind Shear', layer: windShearLayer}, {label: '🧭 Steering Flow (500mb)', layer: steeringLayer}, {label: '💧 Mid-Level Moisture', layer: moistureLayer} ];
+    });
+    </script>
+</body>
+</html>
