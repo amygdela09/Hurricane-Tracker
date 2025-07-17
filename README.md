@@ -3,7 +3,9 @@
 This will eventually be incorporated into my NexradNext repo. 
 
 A comprehensive, interactive web-based platform for monitoring and analyzing tropical cyclones and related weather phenomena in real-time. This tool integrates live storm data, historical tracks, environmental analysis layers, and real-time Hurricane Hunter aircraft tracking into a single, easy-to-use interface.
+
 Features
+
 This application combines data from numerous official and public sources to provide a multi-faceted view of the tropical weather environment.
 🛰️ Live Tropical Cyclone Tracking
  * Official Forecasts: Plots the latest official forecast track and cone of uncertainty from the National Hurricane Center (NHC) for all active storms.
@@ -26,11 +28,12 @@ Analyze the atmospheric conditions that fuel or inhibit tropical development wit
  * Layer Toggling: A user-friendly, grouped layer control allows for toggling the visibility of every data layer, from storm tracks to analysis grids.
  * Basemap Selector: Switch between Street, Satellite, and Dark basemaps to customize your view.
  * Storm Selector: When multiple storms are active, a dropdown menu allows you to focus the map on a specific system.
+   
 Setup and Installation
+
 This project is designed to be lightweight and accessible. It runs entirely in the browser without needing a complex backend.
  * Clone the Repository:
    git clone https://github.com/your-username/hurricane-tracker.git
-
  * Get Your API Key:
    The Hurricane Hunter tracking feature requires a free API key from ADS-B Exchange.
    * Sign up for a key at ADS-B Exchange API Data.
@@ -41,6 +44,7 @@ This project is designed to be lightweight and accessible. It runs entirely in t
 API_KEY: 'YOUR_ADS-B_EXCHANGE_API_KEY',
 
  * Run the Project:
+   
    Simply open the professional_tracker_with_hunters.html file in any modern web browser.
 Credits and Data Sources
 This project would not be possible without the open data and software provided by the following organizations:
@@ -55,7 +59,9 @@ Contributing
 Contributions are welcome and appreciated! If you have an idea for a new feature or have found a bug, please feel free to:
  * Open an issue to discuss the change.
  * Fork the repository and submit a pull request.
+   
 License
+
 This project is licensed under the MIT License. See the LICENSE file for full details.
 Disclaimer
 This tool is for informational and educational purposes only. It should NOT be used for making life-or-death decisions. Always consult official information and follow the guidance issued by the National Hurricane Center and your local authorities.
