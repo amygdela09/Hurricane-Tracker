@@ -46,7 +46,9 @@ API_KEY: 'YOUR_ADS-B_EXCHANGE_API_KEY',
  * Run the Project:
    
    Simply open the professional_tracker_with_hunters.html file in any modern web browser.
+   
 Credits and Data Sources
+
 This project would not be possible without the open data and software provided by the following organizations:
  * National Hurricane Center (NHC): For providing the foundational tropical cyclone advisories, text outlooks, and forecast data.
  * Florida Division of Emergency Management (FDEM): For providing the processed GeoJSON feeds for active storms, which simplifies the visualization of cones, tracks, and spaghetti models.
@@ -55,7 +57,9 @@ This project would not be possible without the open data and software provided b
  * Leaflet.js: The core open-source mapping library that powers the entire interactive map.
  * OpenStreetMap & CartoDB: For the high-quality, free-to-use base map tiles.
  * Flaticon: For the airplane icon used for the Hurricane Hunter tracker.
+
 Contributing
+
 Contributions are welcome and appreciated! If you have an idea for a new feature or have found a bug, please feel free to:
  * Open an issue to discuss the change.
  * Fork the repository and submit a pull request.
